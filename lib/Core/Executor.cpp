@@ -1015,454 +1015,455 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
                                  ConstantExpr::alloc(1, Expr::Bool));
 }
 
-const Cell& Executor::eval(KInstruction *ki, unsigned index, 
-                           ExecutionState &state) const {
-  assert(index < ki->inst->getNumOperands());
-  int vnumber = ki->operands[index];
+    const Cell& Executor::eval(KInstruction *ki, unsigned index, 
+                               ExecutionState &state) const {
+      assert(index < ki->inst->getNumOperands());
+      int vnumber = ki->operands[index];
 
-  assert(vnumber != -1 &&
-         "Invalid operand to eval(), not a value or constant!");
+      assert(vnumber != -1 &&
+             "Invalid operand to eval(), not a value or constant!");
 
-  // Determine if this is a constant or not.
-  if (vnumber < 0) {
-    unsigned index = -vnumber - 2;
-    return kmodule->constantTable[index];
-  } else {
-    unsigned index = vnumber;
-    StackFrame &sf = state.stack.back();
-    return sf.locals[index];
-  }
-}
+      // Determine if this is a constant or not.
+      if (vnumber < 0) {
+        unsigned index = -vnumber - 2;
+        return kmodule->constantTable[index];
+      } else {
+        unsigned index = vnumber;
+        StackFrame &sf = state.stack.back();
+        return sf.locals[index];
+      }
+    }
 
-void Executor::bindLocal(KInstruction *target, ExecutionState &state, 
-                         ref<Expr> value) {
-  getDestCell(state, target).value = value;
-}
+    void Executor::bindLocal(KInstruction *target, ExecutionState &state, 
+                             ref<Expr> value) {
+      getDestCell(state, target).value = value;
+    }
 
-void Executor::bindArgument(KFunction *kf, unsigned index, 
-                            ExecutionState &state, ref<Expr> value) {
-  getArgumentCell(state, kf, index).value = value;
-}
+    void Executor::bindArgument(KFunction *kf, unsigned index, 
+                                ExecutionState &state, ref<Expr> value) {
+      getArgumentCell(state, kf, index).value = value;
+    }
 
-ref<Expr> Executor::toUnique(const ExecutionState &state, 
-                             ref<Expr> &e) {
-  ref<Expr> result = e;
+    ref<Expr> Executor::toUnique(const ExecutionState &state, 
+                                 ref<Expr> &e) {
+      ref<Expr> result = e;
 
-  if (!isa<ConstantExpr>(e)) {
-    ref<ConstantExpr> value;
-    bool isTrue = false;
+      if (!isa<ConstantExpr>(e)) {
+        ref<ConstantExpr> value;
+        bool isTrue = false;
 
-    solver->setTimeout(coreSolverTimeout);      
-    if (solver->getValue(state, e, value) &&
-        solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
-        isTrue)
-      result = value;
-    solver->setTimeout(0);
-  }
-  
-  return result;
-}
+        solver->setTimeout(coreSolverTimeout);      
+        if (solver->getValue(state, e, value) &&
+            solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
+            isTrue)
+          result = value;
+        solver->setTimeout(0);
+      }
+      
+      return result;
+    }
 
 
-/* Concretize the given expression, and return a possible constant value. 
-   'reason' is just a documentation string stating the reason for concretization. */
-ref<klee::ConstantExpr> 
-Executor::toConstant(ExecutionState &state, 
-                     ref<Expr> e,
-                     const char *reason) {
-  e = state.constraints.simplifyExpr(e);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
-    return CE;
+    /* Concretize the given expression, and return a possible constant value. 
+       'reason' is just a documentation string stating the reason for concretization. */
+    ref<klee::ConstantExpr> 
+    Executor::toConstant(ExecutionState &state, 
+                         ref<Expr> e,
+                         const char *reason) {
+      e = state.constraints.simplifyExpr(e);
+      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
+        return CE;
 
-  ref<ConstantExpr> value;
-  bool success = solver->getValue(state, e, value);
-  assert(success && "FIXME: Unhandled solver failure");
-  (void) success;
-
-  std::string str;
-  llvm::raw_string_ostream os(str);
-  os << "silently concretizing (reason: " << reason << ") expression " << e
-     << " to value " << value << " (" << (*(state.pc)).info->file << ":"
-     << (*(state.pc)).info->line << ")";
-
-  if (AllExternalWarnings)
-    klee_warning(reason, os.str().c_str());
-  else
-    klee_warning_once(reason, "%s", os.str().c_str());
-
-  addConstraint(state, EqExpr::create(e, value));
-    
-  return value;
-}
-
-void Executor::executeGetValue(ExecutionState &state,
-                               ref<Expr> e,
-                               KInstruction *target) {
-  e = state.constraints.simplifyExpr(e);
-  std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
-    seedMap.find(&state);
-  if (it==seedMap.end() || isa<ConstantExpr>(e)) {
-    ref<ConstantExpr> value;
-    bool success = solver->getValue(state, e, value);
-    assert(success && "FIXME: Unhandled solver failure");
-    (void) success;
-    bindLocal(target, state, value);
-  } else {
-    std::set< ref<Expr> > values;
-    for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
-           siie = it->second.end(); siit != siie; ++siit) {
       ref<ConstantExpr> value;
-      bool success = 
-        solver->getValue(state, siit->assignment.evaluate(e), value);
+      bool success = solver->getValue(state, e, value);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
-      values.insert(value);
-    }
-    
-    std::vector< ref<Expr> > conditions;
-    for (std::set< ref<Expr> >::iterator vit = values.begin(), 
-           vie = values.end(); vit != vie; ++vit)
-      conditions.push_back(EqExpr::create(e, *vit));
 
-    std::vector<ExecutionState*> branches;
-    branch(state, conditions, branches);
-    
-    std::vector<ExecutionState*>::iterator bit = branches.begin();
-    for (std::set< ref<Expr> >::iterator vit = values.begin(), 
-           vie = values.end(); vit != vie; ++vit) {
-      ExecutionState *es = *bit;
-      if (es)
-        bindLocal(target, *es, *vit);
-      ++bit;
-    }
-  }
-}
+      std::string str;
+      llvm::raw_string_ostream os(str);
+      os << "silently concretizing (reason: " << reason << ") expression " << e
+         << " to value " << value << " (" << (*(state.pc)).info->file << ":"
+         << (*(state.pc)).info->line << ")";
 
-void Executor::printDebugInstructions(ExecutionState &state) {
-  // check do not print
-  if (DebugPrintInstructions.getBits() == 0)
-	  return;
+      if (AllExternalWarnings)
+        klee_warning(reason, os.str().c_str());
+      else
+        klee_warning_once(reason, "%s", os.str().c_str());
 
-  llvm::raw_ostream *stream = 0;
-  if (DebugPrintInstructions.isSet(STDERR_ALL) ||
-      DebugPrintInstructions.isSet(STDERR_SRC) ||
-      DebugPrintInstructions.isSet(STDERR_COMPACT))
-    stream = &llvm::errs();
-  else
-    stream = &debugLogBuffer;
-
-  if (!DebugPrintInstructions.isSet(STDERR_COMPACT) &&
-      !DebugPrintInstructions.isSet(FILE_COMPACT)) {
-    (*stream) << "     " << state.pc->getSourceLocation() << ":";
-  }
-
-  (*stream) << state.pc->info->assemblyLine;
-
-  if (DebugPrintInstructions.isSet(STDERR_ALL) ||
-      DebugPrintInstructions.isSet(FILE_ALL))
-    (*stream) << ":" << *(state.pc->inst);
-  (*stream) << "\n";
-
-  if (DebugPrintInstructions.isSet(FILE_ALL) ||
-      DebugPrintInstructions.isSet(FILE_COMPACT) ||
-      DebugPrintInstructions.isSet(FILE_SRC)) {
-    debugLogBuffer.flush();
-    (*debugInstFile) << debugLogBuffer.str();
-    debugBufferString = "";
-  }
-}
-
-void Executor::stepInstruction(ExecutionState &state) {
-  printDebugInstructions(state);
-  if (statsTracker)
-    statsTracker->stepInstruction(state);
-
-  ++stats::instructions;
-  ++state.steppedInstructions;
-  state.prevPC = state.pc;
-  ++state.pc;
-
-  if (stats::instructions==StopAfterNInstructions)
-    haltExecution = true;
-}
-
-void Executor::executeCall(ExecutionState &state, 
-                           KInstruction *ki,
-                           Function *f,
-                           std::vector< ref<Expr> > &arguments) {
-  Instruction *i = ki->inst;
-  if (f && f->isDeclaration()) {
-    switch(f->getIntrinsicID()) {
-    case Intrinsic::not_intrinsic:
-      // state may be destroyed by this call, cannot touch
-      callExternalFunction(state, ki, f, arguments);
-      break;
+      addConstraint(state, EqExpr::create(e, value));
         
-      // va_arg is handled by caller and intrinsic lowering, see comment for
-      // ExecutionState::varargs
-    case Intrinsic::vastart:  {
-      StackFrame &sf = state.stack.back();
+      return value;
+    }
 
-      // varargs can be zero if no varargs were provided
-      if (!sf.varargs)
-        return;
-
-      // FIXME: This is really specific to the architecture, not the pointer
-      // size. This happens to work for x86-32 and x86-64, however.
-      Expr::Width WordSize = Context::get().getPointerWidth();
-      if (WordSize == Expr::Int32) {
-        executeMemoryOperation(state, true, arguments[0], 
-                               sf.varargs->getBaseExpr(), 0);
+    void Executor::executeGetValue(ExecutionState &state,
+                                   ref<Expr> e,
+                                   KInstruction *target) {
+      e = state.constraints.simplifyExpr(e);
+      std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it = 
+        seedMap.find(&state);
+      if (it==seedMap.end() || isa<ConstantExpr>(e)) {
+        ref<ConstantExpr> value;
+        bool success = solver->getValue(state, e, value);
+        assert(success && "FIXME: Unhandled solver failure");
+        (void) success;
+        bindLocal(target, state, value);
       } else {
-        assert(WordSize == Expr::Int64 && "Unknown word size!");
-
-        // x86-64 has quite complicated calling convention. However,
-        // instead of implementing it, we can do a simple hack: just
-        // make a function believe that all varargs are on stack.
-        executeMemoryOperation(state, true, arguments[0],
-                               ConstantExpr::create(48, 32), 0); // gp_offset
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(4, 64)),
-                               ConstantExpr::create(304, 32), 0); // fp_offset
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(8, 64)),
-                               sf.varargs->getBaseExpr(), 0); // overflow_arg_area
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(16, 64)),
-                               ConstantExpr::create(0, 64), 0); // reg_save_area
-      }
-      break;
-    }
-    case Intrinsic::vaend:
-      // va_end is a noop for the interpreter.
-      //
-      // FIXME: We should validate that the target didn't do something bad
-      // with va_end, however (like call it twice).
-      break;
+        std::set< ref<Expr> > values;
+        for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
+               siie = it->second.end(); siit != siie; ++siit) {
+          ref<ConstantExpr> value;
+          bool success = 
+            solver->getValue(state, siit->assignment.evaluate(e), value);
+          assert(success && "FIXME: Unhandled solver failure");
+          (void) success;
+          values.insert(value);
+        }
         
-    case Intrinsic::vacopy:
-      // va_copy should have been lowered.
-      //
-      // FIXME: It would be nice to check for errors in the usage of this as
-      // well.
-    default:
-      klee_error("unknown intrinsic: %s", f->getName().data());
+        std::vector< ref<Expr> > conditions;
+        for (std::set< ref<Expr> >::iterator vit = values.begin(), 
+               vie = values.end(); vit != vie; ++vit)
+          conditions.push_back(EqExpr::create(e, *vit));
+
+        std::vector<ExecutionState*> branches;
+        branch(state, conditions, branches);
+        
+        std::vector<ExecutionState*>::iterator bit = branches.begin();
+        for (std::set< ref<Expr> >::iterator vit = values.begin(), 
+               vie = values.end(); vit != vie; ++vit) {
+          ExecutionState *es = *bit;
+          if (es)
+            bindLocal(target, *es, *vit);
+          ++bit;
+        }
+      }
     }
 
-    if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
-      transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
-  } else {
-    // FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
-    // guess. This just done to avoid having to pass KInstIterator everywhere
-    // instead of the actual instruction, since we can't make a KInstIterator
-    // from just an instruction (unlike LLVM).
-    KFunction *kf = kmodule->functionMap[f];
-    state.pushFrame(state.prevPC, kf);
-    state.pc = kf->instructions;
+    void Executor::printDebugInstructions(ExecutionState &state) {
+      // check do not print
+      if (DebugPrintInstructions.getBits() == 0)
+              return;
 
-    if (statsTracker)
-      statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
+      llvm::raw_ostream *stream = 0;
+      if (DebugPrintInstructions.isSet(STDERR_ALL) ||
+          DebugPrintInstructions.isSet(STDERR_SRC) ||
+          DebugPrintInstructions.isSet(STDERR_COMPACT))
+        stream = &llvm::errs();
+      else
+        stream = &debugLogBuffer;
 
-     // TODO: support "byval" parameter attribute
-     // TODO: support zeroext, signext, sret attributes
-
-    unsigned callingArgs = arguments.size();
-    unsigned funcArgs = f->arg_size();
-    if (!f->isVarArg()) {
-      if (callingArgs > funcArgs) {
-        klee_warning_once(f, "calling %s with extra arguments.", 
-                          f->getName().data());
-      } else if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments",
-                              User);
-        return;
-      }
-    } else {
-      Expr::Width WordSize = Context::get().getPointerWidth();
-
-      if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments",
-                              User);
-        return;
+      if (!DebugPrintInstructions.isSet(STDERR_COMPACT) &&
+          !DebugPrintInstructions.isSet(FILE_COMPACT)) {
+        (*stream) << "     " << state.pc->getSourceLocation() << ":";
       }
 
-      StackFrame &sf = state.stack.back();
-      unsigned size = 0;
-      bool requires16ByteAlignment = false;
-      for (unsigned i = funcArgs; i < callingArgs; i++) {
-        // FIXME: This is really specific to the architecture, not the pointer
-        // size. This happens to work for x86-32 and x86-64, however.
-        if (WordSize == Expr::Int32) {
-          size += Expr::getMinBytesForWidth(arguments[i]->getWidth());
-        } else {
-          Expr::Width argWidth = arguments[i]->getWidth();
-          // AMD64-ABI 3.5.7p5: Step 7. Align l->overflow_arg_area upwards to a
-          // 16 byte boundary if alignment needed by type exceeds 8 byte
-          // boundary.
-          //
-          // Alignment requirements for scalar types is the same as their size
-          if (argWidth > Expr::Int64) {
-             size = llvm::RoundUpToAlignment(size, 16);
-             requires16ByteAlignment = true;
-          }
-          size += llvm::RoundUpToAlignment(argWidth, WordSize) / 8;
-        }
+      (*stream) << state.pc->info->assemblyLine;
+
+      if (DebugPrintInstructions.isSet(STDERR_ALL) ||
+          DebugPrintInstructions.isSet(FILE_ALL))
+        (*stream) << ":" << *(state.pc->inst);
+      (*stream) << "\n";
+
+      if (DebugPrintInstructions.isSet(FILE_ALL) ||
+          DebugPrintInstructions.isSet(FILE_COMPACT) ||
+          DebugPrintInstructions.isSet(FILE_SRC)) {
+        debugLogBuffer.flush();
+        (*debugInstFile) << debugLogBuffer.str();
+        debugBufferString = "";
       }
+    }
 
-      MemoryObject *mo = sf.varargs =
-          memory->allocate(size, true, false, state.prevPC->inst,
-                           (requires16ByteAlignment ? 16 : 8));
-      if (!mo && size) {
-        terminateStateOnExecError(state, "out of memory (varargs)");
-        return;
-      }
+    void Executor::stepInstruction(ExecutionState &state) {
+      printDebugInstructions(state);
+      if (statsTracker)
+        statsTracker->stepInstruction(state);
 
-      if (mo) {
-        if ((WordSize == Expr::Int64) && (mo->address & 15) &&
-            requires16ByteAlignment) {
-          // Both 64bit Linux/Glibc and 64bit MacOSX should align to 16 bytes.
-          klee_warning_once(
-              0, "While allocating varargs: malloc did not align to 16 bytes.");
-        }
+      ++stats::instructions;
+      ++state.steppedInstructions;
+      state.prevPC = state.pc;
+      ++state.pc;
 
-        ObjectState *os = bindObjectInState(state, mo, true);
-        unsigned offset = 0;
-        for (unsigned i = funcArgs; i < callingArgs; i++) {
+      if (stats::instructions==StopAfterNInstructions)
+        haltExecution = true;
+    }
+
+    void Executor::executeCall(ExecutionState &state, 
+                               KInstruction *ki,
+                               Function *f,
+                               std::vector< ref<Expr> > &arguments) {
+      Instruction *i = ki->inst;
+      if (f && f->isDeclaration()) {
+        switch(f->getIntrinsicID()) {
+        case Intrinsic::not_intrinsic:
+          // state may be destroyed by this call, cannot touch
+          callExternalFunction(state, ki, f, arguments);
+          break;
+            
+          // va_arg is handled by caller and intrinsic lowering, see comment for
+          // ExecutionState::varargs
+        case Intrinsic::vastart:  {
+          StackFrame &sf = state.stack.back();
+
+          // varargs can be zero if no varargs were provided
+          if (!sf.varargs)
+            return;
+
           // FIXME: This is really specific to the architecture, not the pointer
           // size. This happens to work for x86-32 and x86-64, however.
+          Expr::Width WordSize = Context::get().getPointerWidth();
           if (WordSize == Expr::Int32) {
-            os->write(offset, arguments[i]);
-            offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
+            executeMemoryOperation(state, true, arguments[0], 
+                                   sf.varargs->getBaseExpr(), 0);
           } else {
             assert(WordSize == Expr::Int64 && "Unknown word size!");
 
-            Expr::Width argWidth = arguments[i]->getWidth();
-            if (argWidth > Expr::Int64) {
-              offset = llvm::RoundUpToAlignment(offset, 16);
+            // x86-64 has quite complicated calling convention. However,
+            // instead of implementing it, we can do a simple hack: just
+            // make a function believe that all varargs are on stack.
+            executeMemoryOperation(state, true, arguments[0],
+                                   ConstantExpr::create(48, 32), 0); // gp_offset
+            executeMemoryOperation(state, true,
+                                   AddExpr::create(arguments[0], 
+                                                   ConstantExpr::create(4, 64)),
+                                   ConstantExpr::create(304, 32), 0); // fp_offset
+            executeMemoryOperation(state, true,
+                                   AddExpr::create(arguments[0], 
+                                                   ConstantExpr::create(8, 64)),
+                                   sf.varargs->getBaseExpr(), 0); // overflow_arg_area
+            executeMemoryOperation(state, true,
+                                   AddExpr::create(arguments[0], 
+                                                   ConstantExpr::create(16, 64)),
+                                   ConstantExpr::create(0, 64), 0); // reg_save_area
+          }
+          break;
+        }
+        case Intrinsic::vaend:
+          // va_end is a noop for the interpreter.
+          //
+          // FIXME: We should validate that the target didn't do something bad
+          // with va_end, however (like call it twice).
+          break;
+            
+        case Intrinsic::vacopy:
+          // va_copy should have been lowered.
+          //
+          // FIXME: It would be nice to check for errors in the usage of this as
+          // well.
+        default:
+          klee_error("unknown intrinsic: %s", f->getName().data());
+        }
+
+        if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
+          transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
+      } else {
+        // FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
+        // guess. This just done to avoid having to pass KInstIterator everywhere
+        // instead of the actual instruction, since we can't make a KInstIterator
+        // from just an instruction (unlike LLVM).
+        KFunction *kf = kmodule->functionMap[f];
+        state.pushFrame(state.prevPC, kf);
+        state.pc = kf->instructions;
+
+        if (statsTracker)
+          statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
+
+         // TODO: support "byval" parameter attribute
+         // TODO: support zeroext, signext, sret attributes
+
+        unsigned callingArgs = arguments.size();
+        unsigned funcArgs = f->arg_size();
+        if (!f->isVarArg()) {
+          if (callingArgs > funcArgs) {
+            klee_warning_once(f, "calling %s with extra arguments.", 
+                              f->getName().data());
+          } else if (callingArgs < funcArgs) {
+            terminateStateOnError(state, "calling function with too few arguments",
+                                  User);
+            return;
+          }
+        } else {
+          Expr::Width WordSize = Context::get().getPointerWidth();
+
+          if (callingArgs < funcArgs) {
+            terminateStateOnError(state, "calling function with too few arguments",
+                                  User);
+            return;
+          }
+
+          StackFrame &sf = state.stack.back();
+          unsigned size = 0;
+          bool requires16ByteAlignment = false;
+          for (unsigned i = funcArgs; i < callingArgs; i++) {
+            // FIXME: This is really specific to the architecture, not the pointer
+            // size. This happens to work for x86-32 and x86-64, however.
+            if (WordSize == Expr::Int32) {
+              size += Expr::getMinBytesForWidth(arguments[i]->getWidth());
+            } else {
+              Expr::Width argWidth = arguments[i]->getWidth();
+              // AMD64-ABI 3.5.7p5: Step 7. Align l->overflow_arg_area upwards to a
+              // 16 byte boundary if alignment needed by type exceeds 8 byte
+              // boundary.
+              //
+              // Alignment requirements for scalar types is the same as their size
+              if (argWidth > Expr::Int64) {
+                 size = llvm::RoundUpToAlignment(size, 16);
+                 requires16ByteAlignment = true;
+              }
+              size += llvm::RoundUpToAlignment(argWidth, WordSize) / 8;
             }
-            os->write(offset, arguments[i]);
-            offset += llvm::RoundUpToAlignment(argWidth, WordSize) / 8;
+          }
+
+          MemoryObject *mo = sf.varargs =
+              memory->allocate(size, true, false, state.prevPC->inst,
+                               (requires16ByteAlignment ? 16 : 8));
+          if (!mo && size) {
+            terminateStateOnExecError(state, "out of memory (varargs)");
+            return;
+          }
+
+          if (mo) {
+            if ((WordSize == Expr::Int64) && (mo->address & 15) &&
+                requires16ByteAlignment) {
+              // Both 64bit Linux/Glibc and 64bit MacOSX should align to 16 bytes.
+              klee_warning_once(
+                  0, "While allocating varargs: malloc did not align to 16 bytes.");
+            }
+
+            ObjectState *os = bindObjectInState(state, mo, true);
+            unsigned offset = 0;
+            for (unsigned i = funcArgs; i < callingArgs; i++) {
+              // FIXME: This is really specific to the architecture, not the pointer
+              // size. This happens to work for x86-32 and x86-64, however.
+              if (WordSize == Expr::Int32) {
+                os->write(offset, arguments[i]);
+                offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
+              } else {
+                assert(WordSize == Expr::Int64 && "Unknown word size!");
+
+                Expr::Width argWidth = arguments[i]->getWidth();
+                if (argWidth > Expr::Int64) {
+                  offset = llvm::RoundUpToAlignment(offset, 16);
+                }
+                os->write(offset, arguments[i]);
+                offset += llvm::RoundUpToAlignment(argWidth, WordSize) / 8;
+              }
+            }
           }
         }
+
+        unsigned numFormals = f->arg_size();
+        for (unsigned i=0; i<numFormals; ++i) 
+          bindArgument(kf, i, state, arguments[i]);
       }
     }
 
-    unsigned numFormals = f->arg_size();
-    for (unsigned i=0; i<numFormals; ++i) 
-      bindArgument(kf, i, state, arguments[i]);
-  }
-}
+    void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src, 
+                                        ExecutionState &state) {
+      // Note that in general phi nodes can reuse phi values from the same
+      // block but the incoming value is the eval() result *before* the
+      // execution of any phi nodes. this is pathological and doesn't
+      // really seem to occur, but just in case we run the PhiCleanerPass
+      // which makes sure this cannot happen and so it is safe to just
+      // eval things in order. The PhiCleanerPass also makes sure that all
+      // incoming blocks have the same order for each PHINode so we only
+      // have to compute the index once.
+      //
+      // With that done we simply set an index in the state so that PHI
+      // instructions know which argument to eval, set the pc, and continue.
+      
+      // XXX this lookup has to go ?
+      KFunction *kf = state.stack.back().kf;
+      unsigned entry = kf->basicBlockEntry[dst];
+      state.pc = &kf->instructions[entry];
+      if (state.pc->inst->getOpcode() == Instruction::PHI) {
+        PHINode *first = static_cast<PHINode*>(state.pc->inst);
+        state.incomingBBIndex = first->getBasicBlockIndex(src);
+      }
+    }
 
-void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src, 
-                                    ExecutionState &state) {
-  // Note that in general phi nodes can reuse phi values from the same
-  // block but the incoming value is the eval() result *before* the
-  // execution of any phi nodes. this is pathological and doesn't
-  // really seem to occur, but just in case we run the PhiCleanerPass
-  // which makes sure this cannot happen and so it is safe to just
-  // eval things in order. The PhiCleanerPass also makes sure that all
-  // incoming blocks have the same order for each PHINode so we only
-  // have to compute the index once.
-  //
-  // With that done we simply set an index in the state so that PHI
-  // instructions know which argument to eval, set the pc, and continue.
-  
-  // XXX this lookup has to go ?
-  KFunction *kf = state.stack.back().kf;
-  unsigned entry = kf->basicBlockEntry[dst];
-  state.pc = &kf->instructions[entry];
-  if (state.pc->inst->getOpcode() == Instruction::PHI) {
-    PHINode *first = static_cast<PHINode*>(state.pc->inst);
-    state.incomingBBIndex = first->getBasicBlockIndex(src);
-  }
-}
+    /// Compute the true target of a function call, resolving LLVM and KLEE aliases
+    /// and bitcasts.
+    Function* Executor::getTargetFunction(Value *calledVal, ExecutionState &state) {
+      SmallPtrSet<const GlobalValue*, 3> Visited;
 
-/// Compute the true target of a function call, resolving LLVM and KLEE aliases
-/// and bitcasts.
-Function* Executor::getTargetFunction(Value *calledVal, ExecutionState &state) {
-  SmallPtrSet<const GlobalValue*, 3> Visited;
-
-  Constant *c = dyn_cast<Constant>(calledVal);
-  if (!c)
-    return 0;
-
-  while (true) {
-    if (GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 6)
-      if (!Visited.insert(gv).second)
+      Constant *c = dyn_cast<Constant>(calledVal);
+      if (!c)
         return 0;
-#else
-      if (!Visited.insert(gv))
+
+      while (true) {
+        if (GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
+    #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 6)
+          if (!Visited.insert(gv).second)
+            return 0;
+    #else
+          if (!Visited.insert(gv))
+            return 0;
+    #endif
+          std::string alias = state.getFnAlias(gv->getName());
+          if (alias != "") {
+            llvm::Module* currModule = kmodule->module;
+            GlobalValue *old_gv = gv;
+            gv = currModule->getNamedValue(alias);
+            if (!gv) {
+              klee_error("Function %s(), alias for %s not found!\n", alias.c_str(),
+                         old_gv->getName().str().c_str());
+            }
+          }
+         
+          if (Function *f = dyn_cast<Function>(gv))
+            return f;
+          else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(gv))
+            c = ga->getAliasee();
+          else
+            return 0;
+        } else if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c)) {
+          if (ce->getOpcode()==Instruction::BitCast)
+            c = ce->getOperand(0);
+          else
+            return 0;
+        } else
+          return 0;
+      }
+    }
+
+    /// TODO remove?
+    static bool isDebugIntrinsic(const Function *f, KModule *KM) {
+      return false;
+    }
+
+    static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
+      switch(width) {
+      case Expr::Int32:
+        return &llvm::APFloat::IEEEsingle;
+      case Expr::Int64:
+        return &llvm::APFloat::IEEEdouble;
+      case Expr::Fl80:
+        return &llvm::APFloat::x87DoubleExtended;
+      default:
         return 0;
-#endif
-      std::string alias = state.getFnAlias(gv->getName());
-      if (alias != "") {
-        llvm::Module* currModule = kmodule->module;
-        GlobalValue *old_gv = gv;
-        gv = currModule->getNamedValue(alias);
-        if (!gv) {
-          klee_error("Function %s(), alias for %s not found!\n", alias.c_str(),
-                     old_gv->getName().str().c_str());
+      }
+    }
+
+    void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
+      Instruction *i = ki->inst;
+      switch (i->getOpcode()) {
+        // Control flow
+      case Instruction::Ret: {
+        ReturnInst *ri = cast<ReturnInst>(i);
+        KInstIterator kcaller = state.stack.back().caller;
+        Instruction *caller = kcaller ? kcaller->inst : 0;
+        bool isVoidReturn = (ri->getNumOperands() == 0);
+        ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+        
+        if (!isVoidReturn) {
+          result = eval(ki, 0, state).value;
         }
-      }
-     
-      if (Function *f = dyn_cast<Function>(gv))
-        return f;
-      else if (GlobalAlias *ga = dyn_cast<GlobalAlias>(gv))
-        c = ga->getAliasee();
-      else
-        return 0;
-    } else if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c)) {
-      if (ce->getOpcode()==Instruction::BitCast)
-        c = ce->getOperand(0);
-      else
-        return 0;
-    } else
-      return 0;
-  }
-}
-
-/// TODO remove?
-static bool isDebugIntrinsic(const Function *f, KModule *KM) {
-  return false;
-}
-
-static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
-  switch(width) {
-  case Expr::Int32:
-    return &llvm::APFloat::IEEEsingle;
-  case Expr::Int64:
-    return &llvm::APFloat::IEEEdouble;
-  case Expr::Fl80:
-    return &llvm::APFloat::x87DoubleExtended;
-  default:
-    return 0;
-  }
-}
-
-void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
-  Instruction *i = ki->inst;
-  switch (i->getOpcode()) {
-    // Control flow
-  case Instruction::Ret: {
-    ReturnInst *ri = cast<ReturnInst>(i);
-    KInstIterator kcaller = state.stack.back().caller;
-    Instruction *caller = kcaller ? kcaller->inst : 0;
-    bool isVoidReturn = (ri->getNumOperands() == 0);
-    ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
-    
-    if (!isVoidReturn) {
-      result = eval(ki, 0, state).value;
-    }
-    
-    if (state.stack.size() <= 1) {
-      assert(!caller && "caller set on initial stack frame");
-      terminateStateOnExit(state);
-    } else {
-      state.popFrame();
+        
+        if (state.stack.size() <= 1) {
+          assert(!caller && "caller set on initial stack frame");
+          //terminateStateOnExit(state);
+          terminateStateOnExitWithReturnValue(state,result);
+        } else {
+          state.popFrame();
 
       if (statsTracker)
         statsTracker->framePopped(state);
@@ -2870,6 +2871,17 @@ void Executor::terminateStateOnExit(ExecutionState &state) {
       (AlwaysOutputSeeds && seedMap.count(&state)))
     interpreterHandler->processTestCase(state, 0, 0);
   terminateState(state);
+}
+
+void Executor::terminateStateOnExitWithReturnValue(ExecutionState &state, ref<Expr> result){
+
+    result.get()->dump();
+    if (!OnlyOutputStatesCoveringNew || state.coveredNew || 
+      (AlwaysOutputSeeds && seedMap.count(&state))){
+        // See what is the symbolic return value
+        interpreterHandler->processTestCase(state, 0, 0);
+    }
+  terminateState(state); 
 }
 
 const InstructionInfo & Executor::getLastNonKleeInternalInstruction(const ExecutionState &state,

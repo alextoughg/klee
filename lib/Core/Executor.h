@@ -417,6 +417,9 @@ private:
   void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
   // call exit handler and terminate state
   void terminateStateOnExit(ExecutionState &state);
+  // call exit handler and terminate state with symbolic return value
+  void terminateStateOnExitWithReturnValue(ExecutionState &state, ref<Expr> result);
+
   // call error handler and terminate state
   void terminateStateOnError(ExecutionState &state, const llvm::Twine &message,
                              enum TerminateReason termReason,
