@@ -245,6 +245,14 @@ public:
                        const char *errorMessage,
                        const char *errorSuffix);
 
+  // To process test case with function symbolic return value
+  void processTestCaseWithReturnValue(const ExecutionState  &state,
+                       const char *errorMessage,
+                       const char *errorSuffix,
+                       ref<Expr> result);
+
+ 
+
   std::string getOutputFilename(const std::string &filename);
   llvm::raw_fd_ostream *openOutputFile(const std::string &filename);
   std::string getTestFilename(const std::string &suffix, unsigned id);
@@ -472,6 +480,146 @@ void KleeHandler::processTestCase(const ExecutionState &state,
     }
 
     if(WriteSMT2s) {
+      std::string constraints;
+        m_interpreter->getConstraintLog(state, constraints, Interpreter::SMTLIB2);
+        llvm::raw_ostream *f = openTestFile("smt2", id);
+        *f << constraints;
+        delete f;
+    }
+
+    if (m_symPathWriter) {
+      std::vector<unsigned char> symbolicBranches;
+      m_symPathWriter->readStream(m_interpreter->getSymbolicPathStreamID(state),
+                                  symbolicBranches);
+      llvm::raw_fd_ostream *f = openTestFile("sym.path", id);
+      for (std::vector<unsigned char>::iterator I = symbolicBranches.begin(), E = symbolicBranches.end(); I!=E; ++I) {
+        *f << *I << "\n";
+      }
+      delete f;
+    }
+
+    if (WriteCov) {
+      std::map<const std::string*, std::set<unsigned> > cov;
+      m_interpreter->getCoveredLines(state, cov);
+      llvm::raw_ostream *f = openTestFile("cov", id);
+      for (std::map<const std::string*, std::set<unsigned> >::iterator
+             it = cov.begin(), ie = cov.end();
+           it != ie; ++it) {
+        for (std::set<unsigned>::iterator
+               it2 = it->second.begin(), ie = it->second.end();
+             it2 != ie; ++it2)
+          *f << *it->first << ":" << *it2 << "\n";
+      }
+      delete f;
+    }
+
+    if (m_numGeneratedTests == StopAfterNTests)
+      m_interpreter->setHaltExecution(true);
+
+    if (WriteTestInfo) {
+      double elapsed_time = util::getWallTime() - start_time;
+      llvm::raw_ostream *f = openTestFile("info", id);
+      *f << "Time to generate test case: "
+         << elapsed_time << "s\n";
+      delete f;
+    }
+  }
+  
+  if (errorMessage && OptExitOnError) {
+    m_interpreter->prepareForEarlyExit();
+    klee_error("EXITING ON ERROR:\n%s\n", errorMessage);
+  }
+}
+
+/* Outputs all files (.ktest, .kquery, .cov etc.) describing a test case, 
+INCLUDING THE FUNCTION SYMBOLIC RETURN VALUE. */
+void KleeHandler::processTestCaseWithReturnValue(const ExecutionState &state,
+                                  const char *errorMessage,
+                                  const char *errorSuffix,
+                                  ref<Expr> result) 
+{
+  if (!NoOutput) {
+    std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
+    bool success = m_interpreter->getSymbolicSolution(state, out);
+
+    if (!success)
+      klee_warning("unable to get symbolic solution, losing test case");
+
+    double start_time = util::getWallTime();
+
+    unsigned id = ++m_numTotalTests;
+
+    if (success) {
+      KTest b;
+      b.numArgs = m_argc;
+      b.args = m_argv;
+      b.symArgvs = 0;
+      b.symArgvLen = 0;
+      b.numObjects = out.size();
+      b.objects = new KTestObject[b.numObjects];
+      assert(b.objects);
+      for (unsigned i=0; i<b.numObjects; i++) {
+        KTestObject *o = &b.objects[i];
+        o->name = const_cast<char*>(out[i].first.c_str());
+        o->numBytes = out[i].second.size();
+        o->bytes = new unsigned char[o->numBytes];
+        assert(o->bytes);
+        std::copy(out[i].second.begin(), out[i].second.end(), o->bytes);
+      }
+
+      if (!kTest_toFile(&b, getOutputFilename(getTestFilename("ktest", id)).c_str())) {
+        klee_warning("unable to write output test case, losing it");
+      } else {
+        ++m_numGeneratedTests;
+      }
+
+      for (unsigned i=0; i<b.numObjects; i++)
+        delete[] b.objects[i].bytes;
+      delete[] b.objects;
+    }
+
+    if (errorMessage) {
+      llvm::raw_ostream *f = openTestFile(errorSuffix, id);
+      *f << errorMessage;
+      delete f;
+    }
+
+    if (m_pathWriter) {
+      std::vector<unsigned char> concreteBranches;
+      m_pathWriter->readStream(m_interpreter->getPathStreamID(state),
+                               concreteBranches);
+      llvm::raw_fd_ostream *f = openTestFile("path", id);
+      for (std::vector<unsigned char>::iterator I = concreteBranches.begin(),
+                                                E = concreteBranches.end();
+           I != E; ++I) {
+        *f << *I << "\n";
+      }
+      delete f;
+    }
+
+    if (errorMessage || WriteKQueries) {
+      std::string constraints;
+      m_interpreter->getConstraintLog(state, constraints,Interpreter::KQUERY);
+      llvm::raw_ostream *f = openTestFile("kquery", id);
+      *f << constraints;
+      delete f;
+    }
+
+    if (WriteCVCs) {
+      // FIXME: If using Z3 as the core solver the emitted file is actually
+      // SMT-LIBv2 not CVC which is a bit confusing
+      std::string constraints;
+      m_interpreter->getConstraintLog(state, constraints, Interpreter::STP);
+      llvm::raw_ostream *f = openTestFile("cvc", id);
+      *f << constraints;
+      delete f;
+    }
+
+    if(WriteSMT2s) {
+      
+      // Just checking
+      result.get()->dump();
+
       std::string constraints;
         m_interpreter->getConstraintLog(state, constraints, Interpreter::SMTLIB2);
         llvm::raw_ostream *f = openTestFile("smt2", id);

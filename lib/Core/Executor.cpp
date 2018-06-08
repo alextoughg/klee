@@ -2875,11 +2875,10 @@ void Executor::terminateStateOnExit(ExecutionState &state) {
 
 void Executor::terminateStateOnExitWithReturnValue(ExecutionState &state, ref<Expr> result){
 
-    result.get()->dump();
     if (!OnlyOutputStatesCoveringNew || state.coveredNew || 
       (AlwaysOutputSeeds && seedMap.count(&state))){
         // See what is the symbolic return value
-        interpreterHandler->processTestCase(state, 0, 0);
+        interpreterHandler->processTestCaseWithReturnValue(state, 0, 0, result);
     }
   terminateState(state); 
 }

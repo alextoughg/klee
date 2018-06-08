@@ -9,6 +9,9 @@
 #ifndef KLEE_INTERPRETER_H
 #define KLEE_INTERPRETER_H
 
+// For processTestCaseWithReturnValue
+#include "klee/Expr.h"
+
 #include <vector>
 #include <string>
 #include <map>
@@ -44,6 +47,13 @@ public:
   virtual void processTestCase(const ExecutionState &state,
                                const char *err, 
                                const char *suffix) = 0;
+
+  // To include the return symbolic value in the test file
+  virtual void processTestCaseWithReturnValue(const ExecutionState &state,
+                               const char *err, 
+                               const char *suffix,
+                               ref<Expr> result) = 0;
+    
 };
 
 class Interpreter {
