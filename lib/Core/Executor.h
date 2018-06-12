@@ -528,6 +528,11 @@ public:
                                 std::string &res,
                                 Interpreter::LogType logFormat = Interpreter::STP);
 
+  virtual void getConstraintLogWithReturnValue(const ExecutionState &state,
+                                std::string &res,
+                                Interpreter::LogType logFormat = Interpreter::STP,
+                                ref<Expr> result = NULL);
+ 
   virtual bool getSymbolicSolution(const ExecutionState &state, 
                                    std::vector< 
                                    std::pair<std::string,

@@ -24,6 +24,8 @@
 #include "ExecutorTimerInfo.h"
 
 
+#include <stdio.h>
+
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
 #include "klee/Interpreter.h"
@@ -91,6 +93,7 @@
 
 #include <errno.h>
 #include <cxxabi.h>
+
 
 using namespace llvm;
 using namespace klee;
@@ -1454,13 +1457,21 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
         bool isVoidReturn = (ri->getNumOperands() == 0);
         ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
         
+
         if (!isVoidReturn) {
+          
+          //fprintf(stderr, "Return typekind before eval: %d\n", result->getKind());
+
           result = eval(ki, 0, state).value;
         }
+
         
         if (state.stack.size() <= 1) {
           assert(!caller && "caller set on initial stack frame");
           //terminateStateOnExit(state);
+
+          //fprintf(stderr, "Return type kind after eval: %d\n", result->getKind());
+
           terminateStateOnExitWithReturnValue(state,result);
         } else {
           state.popFrame();
@@ -2873,12 +2884,15 @@ void Executor::terminateStateOnExit(ExecutionState &state) {
   terminateState(state);
 }
 
+// So symbolic return value is added as a "constraint" to the list of constraints.
 void Executor::terminateStateOnExitWithReturnValue(ExecutionState &state, ref<Expr> result){
 
     if (!OnlyOutputStatesCoveringNew || state.coveredNew || 
       (AlwaysOutputSeeds && seedMap.count(&state))){
-        // See what is the symbolic return value
-        interpreterHandler->processTestCaseWithReturnValue(state, 0, 0, result);
+        // Append happens here
+        //state.addConstraint(result);
+        //interpreterHandler->processTestCase(state, 0, 0);
+        interpreterHandler->processTestCaseWithReturnValue(state,0,0,result);
     }
   terminateState(state); 
 }
@@ -3684,6 +3698,47 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
     klee_warning("Executor::getConstraintLog() : Log format not supported!");
   }
 }
+
+void Executor::getConstraintLogWithReturnValue(const ExecutionState &state, 
+                                std::string &res,
+                                Interpreter::LogType logFormat,
+                                ref<Expr> result) {
+
+  switch (logFormat) {
+  case STP: {
+    Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
+    char *log = solver->getConstraintLog(query);
+    res = std::string(log);
+    free(log);
+  } break;
+
+  case KQUERY: {
+    std::string Str;
+    llvm::raw_string_ostream info(Str);
+    ExprPPrinter::printConstraints(info, state.constraints);
+    res = info.str();
+  } break;
+
+  case SMTLIB2: {
+    std::string Str;
+    llvm::raw_string_ostream info(Str);
+    ExprSMTLIBPrinter printer;
+    printer.setOutput(info);
+    Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
+    printer.setQuery(query);
+
+
+    // Generate output with symbolic expression return value
+    printer.generateOutputWithReturnValue(result);
+    res = info.str();
+  } break;
+
+  default:
+    klee_warning("Executor::getConstraintLog() : Log format not supported!");
+  }
+}
+
+
 
 bool Executor::getSymbolicSolution(const ExecutionState &state,
                                    std::vector< 

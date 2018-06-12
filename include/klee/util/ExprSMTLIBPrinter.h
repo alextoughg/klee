@@ -161,6 +161,8 @@ public:
   /// call will be ineffective.
   void generateOutput();
 
+  void generateOutputWithReturnValue(ref<Expr> result);
+
   /// Set which SMTLIBv2 logic to use.
   /// This only affects what logic is used in the (set-logic <logic>) command.
   /// The rest of the printed SMTLIBv2 commands are the same regardless of the
@@ -287,6 +289,10 @@ protected:
   /// \param abbrMode the abbreviation mode to use for this expression
   void printExpression(const ref<Expr> &e, SMTLIB_SORT expectedSort);
 
+
+  // To print symbolic return value
+  void printExpressionReturnValue(const ref<Expr> &e, SMTLIB_SORT expectedSort);
+
   /// Scan Expression recursively for Arrays in expressions. Found arrays are
   /// added to
   /// the usedArrays vector.
@@ -371,6 +377,10 @@ private:
   /// Print expression without top-level abbreviations
   void printFullExpression(const ref<Expr> &e, SMTLIB_SORT expectedSort);
 
+  /// Print expression without top-level abbreviations
+  void printFullExpressionReturnValue(const ref<Expr> &e, SMTLIB_SORT expectedSort);
+
+  
   /// Print an assert statement for the given expr.
   void printAssert(const ref<Expr> &e);
 

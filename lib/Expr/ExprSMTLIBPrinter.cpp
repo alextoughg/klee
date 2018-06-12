@@ -11,6 +11,9 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "klee/util/ExprSMTLIBPrinter.h"
 
+// For debugging kind of symbolic return value
+//#include <stdio.h>
+
 #include <stack>
 
 namespace ExprSMTLIBOptions {
@@ -203,8 +206,51 @@ void ExprSMTLIBPrinter::printExpression(
   printFullExpression(e, expectedSort);
 }
 
+void ExprSMTLIBPrinter::printExpressionReturnValue(
+    const ref<Expr> &e, ExprSMTLIBPrinter::SMTLIB_SORT expectedSort) {
+  // check if casting might be necessary
+  /*if (getSort(e) != expectedSort) {
+    printCastToSort(e, expectedSort);
+    return;
+  }*/
+
+  switch (abbrMode) {
+  case ABBR_NONE:
+    break;
+
+  case ABBR_LET: {
+    BindingMap::iterator i = bindings.find(e);
+    if (i != bindings.end()) {
+      *p << "?B" << i->second;
+      return;
+    }
+    break;
+  }
+
+  case ABBR_NAMED: {
+    BindingMap::iterator i = bindings.find(e);
+    if (i != bindings.end()) {
+      if (i->second > 0) {
+        *p << "(! ";
+        printFullExpression(e, expectedSort);
+        *p << " :named ?B" << i->second << ")";
+        i->second = -i->second;
+      } else {
+        *p << "?B" << -i->second;
+      }
+      return;
+    }
+    break;
+  }
+  }
+
+  printFullExpressionReturnValue(e, expectedSort);
+}
+
+
 void ExprSMTLIBPrinter::printFullExpression(
     const ref<Expr> &e, ExprSMTLIBPrinter::SMTLIB_SORT expectedSort) {
+   
   switch (e->getKind()) {
   case Expr::Constant:
     printConstant(cast<ConstantExpr>(e));
@@ -235,11 +281,6 @@ void ExprSMTLIBPrinter::printFullExpression(
 
   case Expr::Eq:
   case Expr::Ne:
-    /* The "=" and distinct operators are special in that it can take any sort
-     * but we must enforce that both arguments are the same sort. We do this in
-     * a lazy way by enforcing the second argument is of the same type as the
-     * first.
-     */
     printSortArgsExpr(e, getSort(e->getKid(0)));
     return;
 
@@ -247,11 +288,7 @@ void ExprSMTLIBPrinter::printFullExpression(
   case Expr::Or:
   case Expr::Xor:
   case Expr::Not:
-    /* These operators have a bitvector version and a bool version.
-     * For these operators only (e.g. wouldn't apply to bvult) if the expected
-     * sort of the expression is T then that implies the arguments are also of
-     * type T.
-     */
+    
     printLogicalOrBitVectorExpr(e, expectedSort);
     return;
 
@@ -260,9 +297,62 @@ void ExprSMTLIBPrinter::printFullExpression(
     return;
 
   default:
-    /* The remaining operators (Add,Sub...,Ult,Ule,..)
-     * Expect SORT_BITVECTOR arguments
-     */
+    printSortArgsExpr(e, SORT_BITVECTOR);
+    return;
+  }
+}
+
+void ExprSMTLIBPrinter::printFullExpressionReturnValue(
+    const ref<Expr> &e, ExprSMTLIBPrinter::SMTLIB_SORT expectedSort) {
+
+  //fprintf(stderr, "Kind of return symbolic value: %d\n", e->getKind());
+   
+  switch (e->getKind()) {
+  case Expr::Constant:
+    printConstant(cast<ConstantExpr>(e));
+    return; // base case
+
+  case Expr::NotOptimized:
+    // skip to child
+    printExpression(e->getKid(0), expectedSort);
+    return;
+
+  case Expr::Read:
+    printReadExpr(cast<ReadExpr>(e));
+    return;
+
+  case Expr::Extract:
+    printExtractExpr(cast<ExtractExpr>(e));
+    return;
+
+  case Expr::SExt:
+  case Expr::ZExt:
+    printCastExpr(cast<CastExpr>(e));
+    return;
+
+  case Expr::Select:
+    // the if-then-else expression.
+    printSelectExpr(cast<SelectExpr>(e), expectedSort);
+    return;
+
+  case Expr::Eq:
+  case Expr::Ne:
+    printSortArgsExpr(e, getSort(e->getKid(0)));
+    return;
+
+  case Expr::And:
+  case Expr::Or:
+  case Expr::Xor:
+  case Expr::Not:
+    
+    printLogicalOrBitVectorExpr(e, expectedSort);
+    return;
+
+  case Expr::AShr:
+    printAShrExpr(cast<AShrExpr>(e));
+    return;
+
+  default:
     printSortArgsExpr(e, SORT_BITVECTOR);
     return;
   }
@@ -534,6 +624,33 @@ void ExprSMTLIBPrinter::generateOutput() {
   printAction();
   printExit();
 }
+
+void ExprSMTLIBPrinter::generateOutputWithReturnValue(ref<Expr> result) {
+  if (p == NULL || query == NULL || o == NULL) {
+    llvm::errs() << "ExprSMTLIBPrinter::generateOutput() Can't print SMTLIBv2. "
+                    "Output or query bad!\n";
+    return;
+  }
+
+  if (humanReadable)
+    printNotice();
+  printOptions();
+  printSetLogic();
+  printArrayDeclarations();
+
+  if (humanReadable)
+    printHumanReadableQuery();
+  else
+    printMachineReadableQuery();
+
+  printAction();
+  printExit();
+
+  // print symbolc execution return value to file HERE
+  printExpressionReturnValue(result, SORT_BOOL);
+
+}
+
 
 void ExprSMTLIBPrinter::printSetLogic() {
   *o << "(set-logic ";

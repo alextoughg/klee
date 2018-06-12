@@ -47,13 +47,13 @@ public:
   virtual void processTestCase(const ExecutionState &state,
                                const char *err, 
                                const char *suffix) = 0;
-
+  
   // To include the return symbolic value in the test file
   virtual void processTestCaseWithReturnValue(const ExecutionState &state,
                                const char *err, 
                                const char *suffix,
                                ref<Expr> result) = 0;
-    
+   
 };
 
 class Interpreter {
@@ -159,7 +159,11 @@ public:
   virtual void getConstraintLog(const ExecutionState &state,
                                 std::string &res,
                                 LogType logFormat = STP) = 0;
-
+  virtual void getConstraintLogWithReturnValue(const ExecutionState &state,
+                                std::string &res,
+                                LogType logFormat = STP,
+                                ref<Expr> result = NULL) = 0;
+   
   virtual bool getSymbolicSolution(const ExecutionState &state, 
                                    std::vector< 
                                    std::pair<std::string,

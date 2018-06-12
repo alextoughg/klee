@@ -245,14 +245,13 @@ public:
                        const char *errorMessage,
                        const char *errorSuffix);
 
-  // To process test case with function symbolic return value
   void processTestCaseWithReturnValue(const ExecutionState  &state,
                        const char *errorMessage,
                        const char *errorSuffix,
                        ref<Expr> result);
 
- 
 
+  
   std::string getOutputFilename(const std::string &filename);
   llvm::raw_fd_ostream *openOutputFile(const std::string &filename);
   std::string getTestFilename(const std::string &suffix, unsigned id);
@@ -531,12 +530,12 @@ void KleeHandler::processTestCase(const ExecutionState &state,
   }
 }
 
-/* Outputs all files (.ktest, .kquery, .cov etc.) describing a test case, 
-INCLUDING THE FUNCTION SYMBOLIC RETURN VALUE. */
+/* Outputs all files (.ktest, .kquery, .cov etc.) describing a test case 
+and also outputs the SYMBOLIC EXPRESSION CORRESPONDING TO THE RETURN STATEMENT. */
 void KleeHandler::processTestCaseWithReturnValue(const ExecutionState &state,
                                   const char *errorMessage,
                                   const char *errorSuffix,
-                                  ref<Expr> result) 
+                                  ref <Expr> result) 
 {
   if (!NoOutput) {
     std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
@@ -616,12 +615,9 @@ void KleeHandler::processTestCaseWithReturnValue(const ExecutionState &state,
     }
 
     if(WriteSMT2s) {
-      
-      // Just checking
-      result.get()->dump();
-
+      // Output symbolic expression return value here
       std::string constraints;
-        m_interpreter->getConstraintLog(state, constraints, Interpreter::SMTLIB2);
+        m_interpreter->getConstraintLogWithReturnValue(state, constraints, Interpreter::SMTLIB2, result);
         llvm::raw_ostream *f = openTestFile("smt2", id);
         *f << constraints;
         delete f;
@@ -670,6 +666,8 @@ void KleeHandler::processTestCaseWithReturnValue(const ExecutionState &state,
     klee_error("EXITING ON ERROR:\n%s\n", errorMessage);
   }
 }
+
+
 
   // load a .path file
 void KleeHandler::loadPathFile(std::string name,
