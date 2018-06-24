@@ -3729,6 +3729,9 @@ void Executor::getConstraintLogWithReturnValue(const ExecutionState &state,
 
 
     // Generate output with symbolic expression return value
+
+    result->dump();
+
     printer.generateOutputWithReturnValue(result);
     res = info.str();
   } break;
