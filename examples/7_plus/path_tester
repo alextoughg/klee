@@ -7,6 +7,11 @@ entry_point=$2
 
 clang -I ../../include -emit-llvm -c -g $test_prog_path
 klee -entry-point=$entry_point --write-smt2s "${name_test_prog}.bc"
-sig="$(grep -Eri "^\s*((unsigned|signed)\s+)?(void|int|char|short|long|float|double)\s+$entry_point" $test_path_prog)"
-sig_without_filename=${sig#*".c:"}
-racket test.rkt "$sig_without_filename"
+#sig="$(grep -Eri "^\s*((unsigned|signed)\s+)?(void|int|char|short|long|float|double)\s+$entry_point" $test_path_prog)"
+#sig_without_filename=${sig#*".c:"}
+#racket test.rkt "$sig_without_filename"
+
+# Or provide binary beforehand so user doesn't have to install ocaml.
+ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
+
+./signature_parser $test_prog_path $entry_point

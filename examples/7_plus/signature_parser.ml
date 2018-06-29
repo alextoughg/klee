@@ -7,7 +7,7 @@ module L = List
 let typename_as_string = function
     Cil.TVoid _ -> "unit"
   | Cil.TInt _ -> "Int"
-  | Cil.TFloat _ -> "float"
+  | Cil.TFloat _ -> "Real"
   | Cil.TPtr _ -> "pointer"
   | Cil.TArray _ -> "array"
   | Cil.TFun _ -> "function"
@@ -73,8 +73,8 @@ let itemOnly (item: Cil.typ option) : Cil.typ =
 (* Test *)
 
 (* Parse file *)
-let filename = "7_plus.c";;
-let name = "seven_plus";;
+let filename = Sys.argv.(1);;
+let name = Sys.argv.(2);;
 let parsed_file = Frontc.parse filename ();;
 
 (* Print function return type *)
