@@ -66,9 +66,18 @@ let itemsOnly (items: 'a list option) : 'a list =
 	| Some l -> l 
 	| None -> []
 
+(* Includes dummy case of None which is never considered *)
 let itemOnly (item: Cil.typ option) : Cil.typ = 
 	match item with
 	| Some x -> x
+	| _ -> Cil.TInt(IInt, [])
+
+(* from: https://www.matt-mcdonnell.com/code/code_ocaml/ocaml_fold/ocaml_fold.html *)
+(* Zip two lists (possibly unequal lengths) into a tuple *)
+let rec zip lst1 lst2 = match lst1,lst2 with
+  | [],_ -> []
+  | _, []-> []
+  | (x::xs),(y::ys) -> (x,y) :: (zip xs ys);;
 
 (* Test *)
 
@@ -81,21 +90,23 @@ let parsed_file = Frontc.parse filename ();;
 
 let rt = funcReturnType parsed_file name;;
 let rti = itemOnly rt;;
-let rtip = L.iter (Printf.printf "%s ") [(typename_as_string rti)];;
-print_endline "";;
+let rtip = L.iter (Printf.printf "%s\n") [(typename_as_string rti)];;
 
-(* Print parameter names *)
+(* Parameter names *)
 let pn = funcParameterNames parsed_file name;;
 let pni = itemsOnly pn;;
-let pnis = L.iter (Printf.printf "%s ") pni;;
-print_endline "";;
+(*let pnis = L.iter (Printf.printf "%s\n") pni;;*)
 
-(* Print parameter types *)
+
+(* Parameter types *)
 let pt = funcParameterTypes parsed_file name;;
 let pti = itemsOnly pt;;
 let ptis = L.map typename_as_string pti;;
-let _ = L.iter (Printf.printf "%s ") ptis;;
-print_endline "";;
+(*let _ = L.iter (Printf.printf "%s\n") ptis;;*)
+
+(* Print zipped list of parameter names and types *)
+let zi = zip pni ptis 
+let zis = L.iter (fun (name,cil_type) -> Printf.printf "%s\n%s\n" name cil_type) zi
 
 
 
