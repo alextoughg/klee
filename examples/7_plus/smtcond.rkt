@@ -37,4 +37,4 @@
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
 
 (displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
-(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
+;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
