@@ -9,7 +9,13 @@
 ;(displayln (SMTCond (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCond (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
 
-(define (SMTCondFunction input-list l)
+(define (SMTCondFunction l)
+  (define (BuildInputList)
+    (let* ([inp (current-input-port)]
+          [ln (read-line inp)])
+      (if (eof-object? ln)
+          (list)
+          (cons (string->symbol ln) (BuildInputList)))))
   (define (ParamTypeList param)
     (match param
       [(list name type) (list (list name type))]
@@ -25,7 +31,10 @@
     [(cons pc1 (cons result1 l)) (list 'ite pc1
                                              result1
                                              (Body l))]))
-  (append (FunctionSignature input-list) (list (Body l))))
+  (append (FunctionSignature (BuildInputList)) (list (Body l))))
 
-(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
-(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
+;(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
+;(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
+
+(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
+(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
