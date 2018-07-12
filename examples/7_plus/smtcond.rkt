@@ -35,17 +35,27 @@
                      (set! last-line s)
                      (BuildPathAndConditionListHelper))]))))
       (BuildPathAndConditionListHelper)))
-  ; e is a string that contains a parenthesized s-expression 
+  ; e is a string that contains a parenthesized s-expression
+  ; converts bit vector operations into operations using primitive types, i.e. Ints
   (define (Transform e)
     (let ([t (read (open-input-string e))])
       (define (Transform-helper s)
         (match s
           [`(_ ,b ,v) (string->number (car (regexp-match* #rx"^bv(.)" #:match-select cadr (symbol->string b))))]
-          [`(assert ,cond) (list 'assert (Transform-helper cond))]
+          [`(assert ,cond) (Transform-helper cond)]
           [`(concat (select ,x ,c) ,p2) x]
-          [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]))
-      (Transform-helper t)
-      ))
+          [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]
+          [`(and ,a ,b) (list 'and (Transform-helper a) (Transform-helper b))]
+          [`(bvule ,a ,b) (list '<= (Transform-helper a) (Transform-helper b))]
+          [`(bvugt ,a ,b) (list '> (Transform-helper a) (Transform-helper b))]
+          [`(bvuge ,a ,b) (list '>= (Transform-helper a) (Transform-helper b))]
+          [`(bvslt ,a ,b) (list '< (Transform-helper a) (Transform-helper b))]
+          [`(bvsle ,a ,b) (list '<= (Transform-helper a) (Transform-helper b))]
+          [`(bvsgt ,a ,b) (list '> (Transform-helper a) (Transform-helper b))]
+          [`(bvsge ,a ,b) (list '>= (Transform-helper a) (Transform-helper b))]
+          [`(let ((,helper-var ,value)) ,c) (list 'let (list (list helper-var (Transform-helper value))) (Transform-helper c))]
+          [s s]))
+      (Transform-helper t)))
   (define (ParamTypeList param)
     (match param
       [(list name type) (list (list name type))]
@@ -97,3 +107,18 @@
 #;(Transform "(assert (=  (_ bv40 32) (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )")
 
 #;(eval '(_ bv40 32))
+
+
+
+#|(set-logic QF_AUFBV )
+(declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
+(assert
+ (let
+     ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )
+   (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
+(check-sat)
+(exit)
+(_ bv1 32)|#
+
+#;(define-fun smtcond ((x Int)) Int
+  (ite (assert (let ((?B1 x)) (and (and (and (= false (= 4 ?B1)) (< ?B1 4)) (= false (= 2 ?B1))) (= false (< ?B1 2))))) 1 (ite (assert (= 4 x)) 4 -1)))
