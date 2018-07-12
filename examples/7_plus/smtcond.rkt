@@ -81,7 +81,7 @@
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
 
-(SMTCondFunction)
+(displayln (SMTCondFunction))
 
 #|(set-logic QF_AUFBV )
 (declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
