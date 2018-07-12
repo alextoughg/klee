@@ -35,6 +35,17 @@
                      (set! last-line s)
                      (BuildPathAndConditionListHelper))]))))
       (BuildPathAndConditionListHelper)))
+  ; e is a string that contains a parenthesized s-expression 
+  (define (Transform e)
+    (let ([t (read (open-input-string e))])
+      (define (Transform-helper s)
+        (match s
+          [`(_ ,b ,v) (string->number (car (regexp-match* #rx"^bv(.)" #:match-select cadr (symbol->string b))))]
+          [`(assert ,cond) (list 'assert (Transform-helper cond))]
+          [`(concat (select ,x ,c) ,p2) x]
+          [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]))
+      (Transform-helper t)
+      ))
   (define (ParamTypeList param)
     (match param
       [(list name type) (list (list name type))]
@@ -51,8 +62,8 @@
                                          result1
                                          (Body l))]))
   (append (FunctionSignature (BuildInputList)) (list (Body
-                                                      (apply append (map
-                                                                     BuildPathAndConditionList (SMTFileList)))))))
+                                                      (map Transform (apply append (map
+                                                                                    BuildPathAndConditionList (SMTFileList))))))))
 
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
@@ -60,7 +71,7 @@
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
 
-(displayln (SMTCondFunction))
+(SMTCondFunction)
 
 #|(set-logic QF_AUFBV )
 (declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
@@ -69,10 +80,20 @@
 (exit)
 (_ bv1 32)|#
 
-#|
-(define-fun smtcond ((x Int)) Int
-(ite (assert (let ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) ) (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
+
+#;(define-fun smtcond ((x Int)) Int
+#;(ite (assert (let ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) ) (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
      (_ bv1 32)
      (ite (assert (=  (_ bv40 32) (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )
           (_ bv4 32)
-          -1)))|#
+          -1)))
+
+#;(match (read (open-input-string "(p 6 32)"))
+  [(list 'p x y) x]
+  [_ 4])
+
+
+#;(Transform "(_ bv4 32)")
+#;(Transform "(assert (=  (_ bv40 32) (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )")
+
+#;(eval '(_ bv40 32))
