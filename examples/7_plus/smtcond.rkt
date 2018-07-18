@@ -21,7 +21,7 @@
       (match f
         [(regexp #rx"\\.smt2$") #t]
         [_ #f]))
-    (filter smt-file? (map path->string (filter file-exists? (directory-list)))))
+    (filter smt-file? (map path->string (directory-list))))
   (define (BuildPathAndConditionList f)
     (let ([finp (open-input-file f)]
           [last-line ""])
@@ -41,7 +41,7 @@
     (let ([t (read (open-input-string e))])
       (define (Transform-helper s)
         (match s
-          [`(_ ,b ,v) (string->number (car (regexp-match* #rx"^bv(.)" #:match-select cadr (symbol->string b))))]
+          [`(_ ,b ,v) (string->number (car (regexp-match* #rx"^bv(.+)" #:match-select cadr (symbol->string b))))]
           [`(assert ,cond) (Transform-helper cond)]
           [`(concat (select ,x ,c) ,p2) x]
           [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]
@@ -53,6 +53,14 @@
           [`(bvsle ,a ,b) (list '<= (Transform-helper a) (Transform-helper b))]
           [`(bvsgt ,a ,b) (list '> (Transform-helper a) (Transform-helper b))]
           [`(bvsge ,a ,b) (list '>= (Transform-helper a) (Transform-helper b))]
+          [`(bvadd ,a ,b) (list '+ (Transform-helper a) (Transform-helper b))]
+          [`(bvmul ,a ,b) (list '* (Transform-helper a) (Transform-helper b))]
+          [`(bvudiv ,a ,b) (list 'div (Transform-helper a) (Transform-helper b))]
+          [`(bvurem ,a ,b) (list 'mod (Transform-helper a) (Transform-helper b))]
+          [`(bvnot ,a) (list 'not (Transform-helper a))]
+          [`(bvand ,a ,b) (list 'and (Transform-helper a) (Transform-helper b))]
+          [`(bvor ,a ,b) (list 'or (Transform-helper a))]
+          [`(bvneg ,a) (list '- (Transform-helper a))]
           [`(let ((,helper-var ,value)) ,c) (list 'let (list (list helper-var (Transform-helper value))) (Transform-helper c))]
           [s s]))
       (Transform-helper t)))
@@ -73,7 +81,9 @@
                                          (Body l))]))
   (append (FunctionSignature (BuildInputList)) (list (Body
                                                       (map Transform (apply append (map
-                                                                                    BuildPathAndConditionList (SMTFileList))))))))
+   
+                                                                                 BuildPathAndConditionList (SMTFileList)))))))
+)
 
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
@@ -81,7 +91,7 @@
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
 ;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
 
-(displayln (SMTCondFunction))
+(SMTCondFunction)
 
 #|(set-logic QF_AUFBV )
 (declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
