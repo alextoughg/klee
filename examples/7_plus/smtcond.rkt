@@ -75,14 +75,21 @@
       (list 'define-fun 'smtcond (ParamTypeList param) ret_type)))
   (define (Body l)
     (match l
-      [(list pc result) (list 'ite pc result -1)]
+      [`(,pc ,result) (list 'ite pc result -1)]
       [(cons pc1 (cons result1 l)) (list 'ite pc1
                                          result1
                                          (Body l))]))
-  (append (FunctionSignature (BuildInputList)) (list (Body
-                                                      (map Transform (apply append (map
-   
-                                                                                 BuildPathAndConditionList (SMTFileList)))))))
+  (define (PutLetsOutside l)
+    (match l
+      [`(ite (let ,binding ,cond) ,then-stmt ,else-stmt) (list 'let binding (list 'ite cond then-stmt (PutLetsOutside else-stmt)))]
+      [_ l]))
+  (append (FunctionSignature (BuildInputList)) (list
+                                                (PutLetsOutside
+                                                 (Body
+                                                  (map Transform
+                                                       (apply append (map
+                                                                      BuildPathAndConditionList
+                                                                      (SMTFileList))))))))
 )
 
 ;(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
