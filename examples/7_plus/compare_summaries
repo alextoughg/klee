@@ -1,0 +1,12 @@
+#!/bin/bash
+
+test_prog_path_1=$1
+test_prog_path_2=$2
+name_test_prog_with_ext=$(basename "$test_prog_path")
+name_test_prog="${name_test_prog_with_ext%.*}"
+entry_point=$3
+func_to_test=$4
+
+touch summaries
+./generate_summary $test_prog_path_1 $entry_point $func_to_test > summaries
+./generate_summary $test_prog_path_2 $entry_point $func_to_test >> summaries

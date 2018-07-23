@@ -1,15 +1,6 @@
 #lang racket
-(define (SMTCond l)
-  (match l
-    [(list pc result) (list 'ite pc result -1)]
-    [(cons pc1 (cons result1 l)) (list 'ite pc1
-                                             result1
-                                             (SMTCond l))]))
-
-;(displayln (SMTCond (list '(and (x > 0) (y > 0)) '(+ x y))))
-;(displayln (SMTCond (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
-
 (define (SMTCondFunction)
+  #| Input list for FunctionSignature |#
   (define (BuildInputList)
     (let* ([inp (current-input-port)]
            [ln (read-line inp)])
@@ -69,10 +60,13 @@
       [(list name type) (list (list name type))]
       [(cons name1 (cons type1 rest-of-params))
        (cons (list name1 type1) (ParamTypeList rest-of-params))]))
+  #| Input: (funcname ret-type (param1 type 1) (param2 type2) ... (paran typen))|#
   (define (FunctionSignature input-list)
-    (let ([ret_type (car input-list)]
-          [param (cdr input-list)])
-      (list 'define-fun 'smtcond (ParamTypeList param) ret_type)))
+    (let
+        ([funcname (car input-list)]
+         [ret_type (car (cdr input-list))]
+         [param (cdr (cdr input-list))])
+      (list 'define-fun funcname (ParamTypeList param) ret_type)))
   (define (Body l)
     (match l
       [`(,pc ,result) (list 'ite pc result -1)]
@@ -83,59 +77,14 @@
     (match l
       [`(ite (let ,binding ,cond) ,then-stmt ,else-stmt) (list 'let binding (list 'ite cond then-stmt (PutLetsOutside else-stmt)))]
       [_ l]))
-  (append (FunctionSignature (BuildInputList)) (list
+  (displayln
+   (append (FunctionSignature (BuildInputList)) (list
                                                 (PutLetsOutside
                                                  (Body
                                                   (map Transform
                                                        (apply append (map
                                                                       BuildPathAndConditionList
-                                                                      (SMTFileList))))))))
+                                                                      (SMTFileList)))))))))
 )
 
-;(displayln (SMTCondFunction (list 'Int 'x 'Int) (list '(and (x > 0) (y > 0)) '(+ x y))))
-;(displayln (SMTCondFunction (list 'Int 'x 'Int 'y 'Int) (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
-
-;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y))))
-;(displayln (SMTCondFunction (list '(and (x > 0) (y > 0)) '(+ x y) '(or (x < 5) (= y 3)) '(* x 2) '(< x y) 6)))
-
 (SMTCondFunction)
-
-#|(set-logic QF_AUFBV )
-(declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
-(assert (let ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) ) (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
-(check-sat)
-(exit)
-(_ bv1 32)|#
-
-
-#;(define-fun smtcond ((x Int)) Int
-#;(ite (assert (let ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) ) (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
-     (_ bv1 32)
-     (ite (assert (=  (_ bv40 32) (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )
-          (_ bv4 32)
-          -1)))
-
-#;(match (read (open-input-string "(p 6 32)"))
-  [(list 'p x y) x]
-  [_ 4])
-
-
-#;(Transform "(_ bv4 32)")
-#;(Transform "(assert (=  (_ bv40 32) (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )")
-
-#;(eval '(_ bv40 32))
-
-
-
-#|(set-logic QF_AUFBV )
-(declare-fun x () (Array (_ BitVec 32) (_ BitVec 8) ) )
-(assert
- (let
-     ( (?B1 (concat  (select  x (_ bv3 32) ) (concat  (select  x (_ bv2 32) ) (concat  (select  x (_ bv1 32) ) (select  x (_ bv0 32) ) ) ) ) ) )
-   (and  (and  (and  (=  false (=  (_ bv4 32) ?B1 ) ) (bvslt  ?B1 (_ bv4 32) ) ) (=  false (=  (_ bv2 32) ?B1 ) ) ) (=  false (bvslt  ?B1 (_ bv2 32) ) ) ) ) )
-(check-sat)
-(exit)
-(_ bv1 32)|#
-
-#;(define-fun smtcond ((x Int)) Int
-  (ite (assert (let ((?B1 x)) (and (and (and (= false (= 4 ?B1)) (< ?B1 4)) (= false (= 2 ?B1))) (= false (< ?B1 2))))) 1 (ite (assert (= 4 x)) 4 -1)))
