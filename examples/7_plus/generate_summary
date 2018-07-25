@@ -5,6 +5,7 @@ name_test_prog_with_ext=$(basename "$test_prog_path")
 name_test_prog="${name_test_prog_with_ext%.*}"
 entry_point=$2
 func_to_test=$3
+smtfunc_name=$4
 
 # This should go in a Makefile!
 # Generate klee executable
@@ -18,5 +19,5 @@ klee -entry-point=$entry_point --write-smt2s "${name_test_prog}.bc"
 ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
 
 mv klee-last/*.smt2 .
-(echo $name_test_prog; ./signature_parser $test_prog_path $func_to_test) | racket smtcond.rkt
+(echo $smtfunc_name; ./signature_parser $test_prog_path $func_to_test) | racket smtcond.rkt
 mv *.smt2 klee-last/

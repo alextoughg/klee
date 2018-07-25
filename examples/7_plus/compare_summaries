@@ -7,6 +7,9 @@ name_test_prog="${name_test_prog_with_ext%.*}"
 entry_point=$3
 func_to_test=$4
 
+readonly s1="oldsummary"
+readonly s2="newsummary"
+
 touch summaries
-./generate_summary $test_prog_path_1 $entry_point $func_to_test > summaries
-./generate_summary $test_prog_path_2 $entry_point $func_to_test >> summaries
+./generate_summary $test_prog_path_1 $entry_point $func_to_test $s1 > summaries
+./generate_summary $test_prog_path_2 $entry_point $func_to_test $s2 >> summaries
