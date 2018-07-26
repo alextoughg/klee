@@ -23,7 +23,15 @@ touch result
 
 ((echo $s1; echo $s2; cat function_signature) | racket generate_assert.rkt) >> result
 
+echo ""
+echo "To be verified:"
+
 cat result
+
+echo ""
+echo "Result:"
+
+z3 -smt2 result
 
 rm function_signature
 rm result
