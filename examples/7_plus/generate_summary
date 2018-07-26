@@ -16,8 +16,8 @@ klee -entry-point=$entry_point --write-smt2s "${name_test_prog}.bc"
 #racket test.rkt "$sig_without_filename"
 
 # Or provide binary beforehand so user doesn't have to install ocaml.
-ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
+#ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
 
 mv klee-last/*.smt2 .
-(echo $smtfunc_name; ./signature_parser $test_prog_path $func_to_test) | racket generate_summary.rkt
+(echo $smtfunc_name; cat function_signature) | racket generate_summary.rkt
 mv *.smt2 klee-last/

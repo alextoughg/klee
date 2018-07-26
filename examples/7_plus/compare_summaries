@@ -10,6 +10,20 @@ func_to_test=$4
 readonly s1="oldsummary"
 readonly s2="newsummary"
 
-touch summaries
-./generate_summary $test_prog_path_1 $entry_point $func_to_test $s1 > summaries
-./generate_summary $test_prog_path_2 $entry_point $func_to_test $s2 >> summaries
+ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
+
+touch function_signature
+./signature_parser $test_prog_path_1 $func_to_test > function_signature
+
+touch result
+(cat function_signature | racket generate_constants.rkt) > result
+
+./generate_summary $test_prog_path_1 $entry_point $func_to_test $s1 >> result
+./generate_summary $test_prog_path_2 $entry_point $func_to_test $s2 >> result
+
+((echo $s1; echo $s2; cat function_signature) | racket generate_assert.rkt) >> result
+
+cat result
+
+rm function_signature
+rm result
