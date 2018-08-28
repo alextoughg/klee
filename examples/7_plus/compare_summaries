@@ -16,7 +16,7 @@ touch function_signature
 ./signature_parser $test_prog_path_1 $func_to_test > function_signature
 
 touch result
-(cat function_signature | racket generate_constants.rkt) > result
+(cat function_signature | racket generate_constants.rkt) > result 
 
 ./generate_summary $test_prog_path_1 $entry_point $func_to_test $s1 >> result
 ./generate_summary $test_prog_path_2 $entry_point $func_to_test $s2 >> result

@@ -2,6 +2,7 @@
 
 int seven_plus(int x)
 {
+	klee_make_symbolic(&x,sizeof(x),"x");
         if(x>10){
                 return x;
         }
@@ -10,9 +11,9 @@ int seven_plus(int x)
         }
 }
 
-int main()
+/*int main()
 {
         int a;
         klee_make_symbolic(&a,sizeof(a),"a");
         return seven_plus(a);
-}
+}*/

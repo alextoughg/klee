@@ -1,0 +1,64 @@
+#!/bin/bash
+
+test_prog_path_1=$1
+test_prog_path_2=$2
+name_test_prog_with_ext=$(basename "$test_prog_path")
+name_test_prog="${name_test_prog_with_ext%.*}"
+client=$3
+library=$4
+client_param=$5
+client_param_type=$6
+library_call_param=$7
+library_call_param_type=$8
+
+readonly s1="oldsummary"
+readonly s2="newsummary"
+
+echo ""
+echo "Time to build signature parser:"
+time ocamlfind ocamlopt -o signature_parser -linkpkg -package cil signature_parser.ml
+
+touch function_signature
+
+echo ""
+echo "Time to parse function signature:"
+time ./signature_parser $test_prog_path_1 $library > function_signature
+
+touch result
+#(cat function_signature | racket generate_constants.rkt) > result 
+
+# User inputs client param and type manually.
+echo ""
+echo "Time to generate constants:"
+time ((echo "Int"; echo $client_param; echo $client_param_type) | racket generate_constants.rkt) > result
+
+echo ""
+echo "Time to generate summary of old library version:"
+time ./generate_summary $test_prog_path_1 $client $library $s1 >> result
+
+echo ""
+echo "Time to generate summary of new library version:"
+time ./generate_summary $test_prog_path_2 $client $library $s2 >> result
+
+#((echo $s1; echo $s2; cat function_signature) | racket generate_assert.rkt) >> result
+
+echo ""
+echo "Time to generate assertion:"
+time ((echo $s1; echo $s2; echo "Int"; echo $library_call_param; echo $library_call_param_type) | racket generate_assert.rkt) >> result
+
+
+
+echo ""
+echo "To be verified:"
+
+cat result
+
+echo ""
+echo "Result:"
+
+echo ""
+echo "Time spent in z3 solver:"
+time z3 -smt2 result
+
+rm function_signature
+rm result
