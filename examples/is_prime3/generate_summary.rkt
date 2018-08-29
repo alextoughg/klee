@@ -35,7 +35,7 @@
         (match s
           [`((_ zero_extend ,a) ,e) (Transform-helper e)]
           [`(_ ,b ,v) (let ([x (string->number (car (regexp-match* #rx"^bv(.+)" #:match-select cadr (symbol->string b))))]) 
-                                (if (= x 4294967295) -1 x))]
+                                (if (= x 4294967295) -1 (if (= x 4294967294) -2 x)))]
           [`(assert ,cond) (Transform-helper cond)]
           [`(concat (select ,x ,c) ,p2) x]
           [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]
