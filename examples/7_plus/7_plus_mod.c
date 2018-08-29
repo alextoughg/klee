@@ -1,8 +1,7 @@
 #include<klee/klee.h>
 
-int seven_plus(int x)
+int lib(int x)
 {
-	klee_make_symbolic(&x,sizeof(x),"x");
         if(x>5){
                 return x;
         }
@@ -10,4 +9,17 @@ int seven_plus(int x)
                 return 7+x;
         }
 }
+
+int client(int x)
+{
+    
+    klee_make_symbolic(&x,sizeof(x),"x");
+    if(x > 5){
+        return lib(x);
+    } 
+    else {
+        return x;
+    }
+}
+
 
