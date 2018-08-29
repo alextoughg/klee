@@ -28,11 +28,14 @@
       (BuildPathAndConditionListHelper)))
   ; e is a string that contains a parenthesized s-expression
   ; converts bit vector operations into operations using primitive types, i.e. Ints
+  ; list of bitvector operations: http://smtlib.cs.uiowa.edu/logics-all.shtml  
   (define (Transform e)
     (let ([t (read (open-input-string e))])
       (define (Transform-helper s)
         (match s
-          [`(_ ,b ,v) (string->number (car (regexp-match* #rx"^bv(.+)" #:match-select cadr (symbol->string b))))]
+          [`((_ zero_extend ,a) ,e) (Transform-helper e)]
+          [`(_ ,b ,v) (let ([x (string->number (car (regexp-match* #rx"^bv(.+)" #:match-select cadr (symbol->string b))))]) 
+                                (if (= x 4294967295) -1 x))]
           [`(assert ,cond) (Transform-helper cond)]
           [`(concat (select ,x ,c) ,p2) x]
           [`(= ,a ,b) (list '= (Transform-helper a) (Transform-helper b))]
@@ -48,7 +51,9 @@
 	  [`(bvsub ,a ,b) (list '- (Transform-helper a) (Transform-helper b))]
           [`(bvmul ,a ,b) (list '* (Transform-helper a) (Transform-helper b))]
           [`(bvudiv ,a ,b) (list 'div (Transform-helper a) (Transform-helper b))]
+          [`(bvsdiv ,a ,b) (list 'div (Transform-helper a) (Transform-helper b))]
           [`(bvurem ,a ,b) (list 'mod (Transform-helper a) (Transform-helper b))]
+          [`(bvsrem ,a ,b) (list 'mod (Transform-helper a) (Transform-helper b))]
           [`(bvnot ,a) (list 'not (Transform-helper a))]
           [`(bvand ,a ,b) (list 'and (Transform-helper a) (Transform-helper b))]
           [`(bvor ,a ,b) (list 'or (Transform-helper a))]
